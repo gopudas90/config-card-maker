@@ -105,6 +105,35 @@
   .field input[type=text]:focus { outline: none; border-color: var(--ui-accent); }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
+  /* background swatches */
+  .swatches { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px; }
+  .swatch {
+    appearance: none;
+    position: relative;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.18);
+    cursor: pointer;
+    transition: transform .2s cubic-bezier(.22, 1, .36, 1);
+  }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--ui-accent);
+    opacity: 0;
+    transform: scale(.85);
+    transition: opacity .2s ease, transform .25s cubic-bezier(.22, 1, .36, 1);
+  }
+  .swatch[aria-checked="true"]::after { opacity: 1; transform: none; }
+  .swatch:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }
+  @media (max-width: 760px) { .swatch { width: 34px; height: 34px; } }
+
   .photo-pick { display: flex; align-items: center; gap: 10px; }
   .thumb {
     width: 40px;
@@ -233,6 +262,7 @@
   .panel > :nth-child(3) { animation-delay: .40s; }
   .panel > :nth-child(4) { animation-delay: .46s; }
   .panel > :nth-child(5) { animation-delay: .52s; }
+  .panel > :nth-child(6) { animation-delay: .58s; }
   @keyframes stageIn { from { opacity: 0; transform: scale(.98); } }
   @keyframes panelIn { from { opacity: 0; transform: translateX(28px) scale(.98); } }
   @keyframes itemIn  { from { opacity: 0; transform: translateY(10px); } }
@@ -421,6 +451,11 @@
     </div>
   </section>
 
+  <section>
+    <h2>Background</h2>
+    <div class="swatches" id="swatches" role="radiogroup" aria-label="Background colour"></div>
+  </section>
+
   <section class="desk-only">
     <h2>Preview</h2>
     <div class="transport">
@@ -566,6 +601,25 @@ const CORNERS = [
   [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 0], [0, 0, 0, 0],
 ];
 const TILE_COLORS = [C.yellow, C.pink, C.coral, C.lilac, C.sky, C.cream, C.ink];
+
+// Poster backgrounds, all as vivid as the green: card colour, the deeper tone that fills an
+// empty photo mask, the cursor/name-tag colour, and piece colours too close to the background
+// to read (they borrow the next colour instead)
+const BACKGROUNDS = [
+  { id: 'green',  name: 'Green',  bg: '#0ACF83', frame: '#09B874', tag: C.hot, avoid: [] },
+  { id: 'pink',   name: 'Pink',   bg: '#FF66C4', frame: '#F04DB2', tag: C.ink, avoid: [C.pink] },
+  { id: 'blue',   name: 'Blue',   bg: '#1FB2FF', frame: '#0A9EEB', tag: C.hot, avoid: [C.sky] },
+  { id: 'purple', name: 'Purple', bg: '#9D70FF', frame: '#8A5CF5', tag: C.hot, avoid: [C.lilac] },
+  { id: 'yellow', name: 'Yellow', bg: '#FFCC00', frame: '#F0BD00', tag: C.hot, avoid: [C.yellow] },
+  { id: 'orange', name: 'Orange', bg: '#FF7A33', frame: '#F2661A', tag: C.ink, avoid: [C.coral] },
+];
+const theme = () => BACKGROUNDS.find(b => b.id === state.bg) || BACKGROUNDS[0];
+function tileColor(tile) {
+  const avoid = theme().avoid;
+  let i = tile.ci;
+  while (avoid.includes(TILE_COLORS[i])) i = (i + 1) % TILE_COLORS.length;
+  return TILE_COLORS[i];
+}
 const TILES = (() => {
   const rnd = mulberry32(20261015);
   const probe = document.createElement('canvas').getContext('2d');
@@ -585,7 +639,7 @@ const TILES = (() => {
         bend: (rnd() - .5) * 260,
         rot: (rnd() - .5) * Math.PI * 1.6,
         corners: CORNERS[Math.floor(rnd() * CORNERS.length)],
-        color: TILE_COLORS[Math.floor(rnd() * TILE_COLORS.length)],
+        ci: Math.floor(rnd() * TILE_COLORS.length),
         delay: rnd() * 0.9,
         sweep: (c + r) / (GRID.cols + GRID.rows - 2),
       });
@@ -605,7 +659,7 @@ const inOutCubic = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2
 const inOutSine = p => -(Math.cos(Math.PI * p) - 1) / 2;
 
 /* ───────────────────────── State ───────────────────────── */
-const defaults = { name: '', role: '', date: '15 October 2026', place: 'Bengaluru, India' };
+const defaults = { name: '', role: '', date: '15 October 2026', place: 'Bengaluru, India', bg: 'green' };
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('config-card-v2') || '{}'); } catch (e) {}
 const state = { ...defaults, ...saved };
@@ -664,7 +718,7 @@ function wrap(ctx, text, max, maxLines) {
 // photo (or plain frame tone) filling the mask rectangle
 function drawContent(ctx, t) {
   const m = L.mask;
-  ctx.fillStyle = C.frame;
+  ctx.fillStyle = theme().frame;
   ctx.fillRect(m.x, m.y, m.w, m.h);
   if (!photo) return;
   const z = lerp(1.12, 1, outCubic(prog(t, T.reveal, 2.4)));
@@ -712,7 +766,7 @@ function drawTile(ctx, tile, t) {
   ctx.translate(x, y);
   ctx.rotate(tile.rot * (1 - outCubic(p)));
   ctx.scale(s, s);
-  ctx.fillStyle = tile.color;
+  ctx.fillStyle = tileColor(tile);
   ctx.beginPath();
   ctx.roundRect(-r, -r, size, size, tile.corners.map(k => k ? r : size * 0.08));
   ctx.fill();
@@ -728,10 +782,11 @@ function draw(ctx, t, scale = 1) {
   ctx.globalAlpha = 1;
 
   /* background + colour bloom */
-  const ringColors = [C.pink, C.yellow, C.lilac, C.sky, C.green];
+  const bg = theme().bg;
+  const ringColors = [C.pink, C.yellow, C.lilac, C.sky, bg];
   const lastRing = T.bloom + 4 * 0.11 + 1.15;
   if (t >= lastRing) {
-    ctx.fillStyle = C.green;
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
   } else {
     ctx.fillStyle = C.dark;
@@ -840,7 +895,7 @@ function draw(ctx, t, scale = 1) {
     ctx.shadowColor = 'rgba(0,0,0,.22)';
     ctx.shadowBlur = 10;
     ctx.shadowOffsetY = 3;
-    ctx.fillStyle = C.hot;
+    ctx.fillStyle = theme().tag;
     ctx.fill(CURSOR);
     ctx.shadowColor = 'transparent';
     ctx.lineWidth = 1.6;
@@ -860,7 +915,7 @@ function draw(ctx, t, scale = 1) {
       const ss = lerp(0.8, 1, pt);
       ctx.scale(ss, ss);
       ctx.globalAlpha *= clamp01(pt * 1.4);
-      ctx.fillStyle = C.hot;
+      ctx.fillStyle = theme().tag;
       ctx.beginPath();
       ctx.roundRect(0, 0, tw, L.tag.h, [6, 31, 31, 31]);
       ctx.fill();
@@ -983,6 +1038,25 @@ function save() {
   input.value = state[key];
   input.addEventListener('input', () => { state[key] = input.value; save(); showEdits(); });
 });
+// background colour swatches
+const swatches = document.getElementById('swatches');
+BACKGROUNDS.forEach(b => {
+  const s = document.createElement('button');
+  s.type = 'button';
+  s.className = 'swatch';
+  s.setAttribute('role', 'radio');
+  s.setAttribute('aria-label', b.name);
+  s.title = b.name;
+  s.style.setProperty('--c', b.bg);
+  s.dataset.bg = b.id;
+  s.addEventListener('click', () => { state.bg = b.id; save(); syncSwatches(); showEdits(); });
+  swatches.appendChild(s);
+});
+function syncSwatches() {
+  swatches.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-checked', String(s.dataset.bg === theme().id)));
+}
+syncSwatches();
+
 const thumb = document.getElementById('thumb');
 const clearBtn = document.getElementById('clearPhoto');
 const fileInput = document.getElementById('in-photo');
