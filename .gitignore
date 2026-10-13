@@ -1,0 +1,4 @@
+.playwright-mcp/
+*.mp4
+.DS_Store
+Thumbs.db
