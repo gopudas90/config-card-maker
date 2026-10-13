@@ -2,7 +2,7 @@
 
 Make an animated “I’m attending Config” card for Instagram: add your name, position and photo, then download a 1080 × 1440, 60 fps MP4 or a PNG.
 
-**Live tool:** https://gopustaxlabs.github.io/config-card-maker/
+**Live tool:** https://gopudas90.github.io/config-card-maker/
 
 ## What it does
 
